@@ -41,11 +41,11 @@ bool SerialAPI::open(std::string _device)
         if(serial.is_open())device = _device;
         return serial.is_open();
     }
-    catch (boost::exception& e)
+    catch (boost::system::system_error& e)
     {
     	if(m_err_callback)
             m_err_callback->InvokeAsync("", FB::variant_list_of
-            (boost::get_error_info<boost::errinfo_file_open_mode>(e)));
+            (e.what()));
         return false;
     }
 
@@ -178,6 +178,10 @@ void SerialAPI::do_close(const boost::system::error_code& error)
 {
     if (error == boost::asio::error::operation_aborted) // if this call is the result of a timer cancel() 
         return; // ignore it because the connection canceled the timer 
+
+    if(m_err_callback && error)
+        m_err_callback->InvokeAsync("", FB::variant_list_of
+            (error.message()));
     
     serial.close(); 
 }
