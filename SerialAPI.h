@@ -42,6 +42,7 @@ public:
 
 	void sendmulti(const FB::JSObjectPtr& msg, int length)
 	{
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
 		unsigned char *message = new unsigned char[length];
 		FB::variant v;
 		for(int i = 0; i < length; i++)
@@ -55,16 +56,19 @@ public:
     // Send a byte to serial port
     void send(const unsigned char msg)
     {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
         io.post(boost::bind(&SerialAPI::do_send, this, msg)); 
     }
     bool sendtest()
     {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
         io.post(boost::bind(&SerialAPI::do_send, this, 'a'));
         return true;
     }
 
 	void DetectComPorts(std::vector<std::wstring>& list)
 	{
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
 #if defined(_WIN32) || defined(_WIN64)
 		for(int i=1; i<=255; i++)	
 		{
@@ -97,11 +101,16 @@ public:
 
     bool is_open()
     {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
         return serial.is_open();
     }
 
     void close()
     {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
+        // if io has stopped, do_close() is not called, but is placed on a queue
+        // then when io starts again, do_close() is called immediately, and io stops without reset being called
+
         // check if io thread is not running yet
         if(m_thread.get_id()==boost::thread::id())
         {

@@ -29,12 +29,14 @@ SerialAPI::SerialAPI(const FB::BrowserHostPtr& host) : m_host(host),io(), serial
 
 SerialAPI::~SerialAPI(void)
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     m_thread.interrupt();
     close();
 }
 
 bool SerialAPI::open(std::string _device)
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if(serial.is_open())close();
     try
     {
@@ -54,6 +56,7 @@ bool SerialAPI::open(std::string _device)
 bool SerialAPI::set_option(unsigned int baud, unsigned int parity,
     unsigned int csize, unsigned int flow, unsigned int stop)
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if(!serial.is_open())   return false;
 
     boost::asio::serial_port_base::baud_rate opt_baud(baud);
@@ -79,16 +82,19 @@ bool SerialAPI::set_option(unsigned int baud, unsigned int parity,
 
 void SerialAPI::recv_callback(const FB::JSObjectPtr& callback)
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     m_recv_callback = callback;
 }
 
 void SerialAPI::err_callback(const FB::JSObjectPtr& callback)
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     m_err_callback = callback;
 }
 
 void SerialAPI::recv_start(void) 
 { // Start an asynchronous read and call read_complete when it completes or fails 
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     serial.async_read_some(boost::asio::buffer(recv_msg, max_buffer_length), 
         boost::bind(&SerialAPI::recv_complete, 
         this, 
@@ -98,6 +104,7 @@ void SerialAPI::recv_start(void)
 
 void SerialAPI::recv_complete(const boost::system::error_code& error, size_t bytes_transferred) 
 { // the asynchronous read operation has now completed or failed and returned an error 
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if (!error) 
     { // read completed, so process the data 
         //cout.write(recv_msg, bytes_transferred); // echo to standard output
@@ -111,11 +118,18 @@ void SerialAPI::recv_complete(const boost::system::error_code& error, size_t byt
         recv_start(); // start waiting for another asynchronous read again 
     } 
     else 
+    {
+        if(m_err_callback)
+            m_err_callback->InvokeAsync("", FB::variant_list_of
+                ("recv: " + error.message()));
+
         do_close(error); 
+    }
 } 
 
 void SerialAPI::do_multi_send(const unsigned char msg[], const int length) 
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
 	bool write_in_progress = !send_msg.empty(); // is there anything currently being written? 
 	for(int i = 0; i < length; i++)
 	{
@@ -128,6 +142,7 @@ void SerialAPI::do_multi_send(const unsigned char msg[], const int length)
 
 void SerialAPI::send_multi_start(int length) 
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     boost::asio::async_write(serial, 
         boost::asio::buffer(&send_msg.front(), length), 
         boost::bind(&SerialAPI::send_multi_complete, 
@@ -137,16 +152,26 @@ void SerialAPI::send_multi_start(int length)
 
 void SerialAPI::send_multi_complete(const boost::system::error_code& error) 
 { // the asynchronous read operation has now completed or failed and returned an error 
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if (!error) 
     { // write completed, so send next write data 
         send_msg.clear(); // remove the completed data 
     } 
     else 
+    {
+        if(m_err_callback)
+            m_err_callback->InvokeAsync("", FB::variant_list_of
+                ("send_multi: " + error.message()));
+
         do_close(error); 
+    }
 } 
 
 void SerialAPI::do_send(const unsigned char msg) 
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
+    // it is possible for send_msg to be full but no write occuring
+    // in that case it becomes impossible to send data
     bool write_in_progress = !send_msg.empty(); // is there anything currently being written? 
     send_msg.push_back(msg); // store in write buffer 
     if (!write_in_progress) // if nothing is currently being written, then start 
@@ -155,6 +180,7 @@ void SerialAPI::do_send(const unsigned char msg)
 
 void SerialAPI::send_start(void)
 { // Start an asynchronous write and call write_complete when it completes or fails 
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     boost::asio::async_write(serial, 
         boost::asio::buffer(&send_msg.front(), 1), 
         boost::bind(&SerialAPI::send_complete, 
@@ -164,6 +190,7 @@ void SerialAPI::send_start(void)
 
 void SerialAPI::send_complete(const boost::system::error_code& error) 
 { // the asynchronous read operation has now completed or failed and returned an error 
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if (!error) 
     { // write completed, so send next write data 
         send_msg.pop_front(); // remove the completed data 
@@ -171,17 +198,20 @@ void SerialAPI::send_complete(const boost::system::error_code& error)
             send_start(); // then start sending the next item in the buffer 
     } 
     else 
+    {
+        if(m_err_callback)
+            m_err_callback->InvokeAsync("", FB::variant_list_of
+                ("send: " + error.message()));
+
         do_close(error); 
+    }
 } 
 
 void SerialAPI::do_close(const boost::system::error_code& error) 
 {
+    if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
     if (error == boost::asio::error::operation_aborted) // if this call is the result of a timer cancel() 
         return; // ignore it because the connection canceled the timer 
 
-    if(m_err_callback && error)
-        m_err_callback->InvokeAsync("", FB::variant_list_of
-            (error.message()));
-    
     serial.close(); 
 }
