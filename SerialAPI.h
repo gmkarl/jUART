@@ -129,6 +129,7 @@ public:
 
     void close()
     {
+        // check if io thread is not running yet
         if(m_thread.get_id()==boost::thread::id())
         {
             do_close(boost::system::error_code());
