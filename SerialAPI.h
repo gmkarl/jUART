@@ -15,6 +15,12 @@
 #include <deque>
 #include <boost/lexical_cast.hpp> 
 #include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/filesystem.hpp>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <glob.h>
+#include <sys/ioctl.h>
+#endif
 #include "JSAPIAuto.h"
 #include "BrowserHost.h"
 
@@ -66,7 +72,7 @@ public:
         return true;
     }
 
-	void DetectComPorts(std::vector<std::wstring>& list)
+	void DetectSerialPorts(std::vector<boost::filesystem::path::string_type>& list)
 	{
     if(m_err_callback) m_err_callback->InvokeAsync("", FB::variant_list_of(__PRETTY_FUNCTION__));
 #if defined(_WIN32) || defined(_WIN64)
@@ -90,12 +96,33 @@ public:
 		
 			delete [] lpCC;
 		}
+#elif __APPLE__
+		glob_t globs;
+		glob("/dev/tty.*", GLOB_NOSORT, NULL, &globs);
+		for (char ** portp = globs.gl_pathv; *portp != NULL; ++portp) {
+			list.push_back(*portp);
+		}
+		globfree(&globs);
+#else
+		// just return all ttys with no window size for now
+		glob_t globs;
+		glob("/dev/tty*", GLOB_NOSORT, NULL, &globs);
+		for (char ** portp = globs.gl_pathv; *portp != NULL; ++portp) {
+			struct winsize ws = {0,0};
+			int fd = ::open(*portp, O_RDWR | O_NOCTTY | O_NDELAY);
+			if (fd == -1) continue;
+			ioctl(fd, TIOCGWINSZ, &ws);
+			if (ws.ws_row == 0 && ws.ws_col == 0)
+				list.push_back(*portp);
+			::close(fd);
+		}
+		globfree(&globs);
 #endif
 	}
 
 	FB::VariantList getports() {
-		std::vector<std::wstring> valVec;
-		DetectComPorts(valVec);
+		std::vector<boost::filesystem::path::string_type> valVec;
+		DetectSerialPorts(valVec);
 		return FB::make_variant_list(valVec);
 	}
 
